@@ -1,0 +1,180 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* -------- Estruturas -------- */
+
+// Nó da árvore que representa uma sala da mansão
+typedef struct Sala {
+    char *nome;            // nome da sala
+    char *pista;           // pista opcional (NULL se não houver)
+    struct Sala *esquerda;
+    struct Sala *direita;
+} Sala;
+
+// Nó da BST que armazena pistas coletadas
+typedef struct PistaNode {
+    char *pista;
+    struct PistaNode *esquerda;
+    struct PistaNode *direita;
+} PistaNode;
+
+/* -------- Funções utilitárias de alocação/liberação -------- */
+
+// Copia uma string alocando memória (retorna NULL se s for NULL)
+char* copiarString(const char *s) {
+    if (s == NULL) return NULL;
+    char *c = malloc(strlen(s) + 1);
+    if (!c) {
+        fprintf(stderr, "Erro ao alocar memória para string\n");
+        exit(1);
+    }
+    strcpy(c, s);
+    return c;
+}
+
+/* 
+ * criarSala() – cria dinamicamente um cômodo com ou sem pista.
+ * Parâmetros:
+ *   nome  - nome da sala (ex: "Sala de Estar")
+ *   pista - texto da pista OU NULL se não houver pista
+ * Retorno:
+ *   ponteiro para Sala alocada dinamicamente
+ */
+Sala* criarSala(const char *nome, const char *pista) {
+    Sala *s = (Sala*) malloc(sizeof(Sala));
+    if (!s) {
+        fprintf(stderr, "Erro ao alocar memória para Sala\n");
+        exit(1);
+    }
+    s->nome = copiarString(nome);
+    s->pista = copiarString(pista); // pode ser NULL
+    s->esquerda = s->direita = NULL;
+    return s;
+}
+
+/* Libera recursivamente a árvore de salas (pré-ordem) */
+void liberarSalas(Sala *r) {
+    if (!r) return;
+    liberarSalas(r->esquerda);
+    liberarSalas(r->direita);
+    free(r->nome);
+    if (r->pista) free(r->pista);
+    free(r);
+}
+
+/* 
+ * inserirPista() – insere uma nova pista na árvore de pistas (BST).
+ * - Evita inserir duplicatas (string idêntica).
+ * - Ordenação: strcmp padrão (lexicográfica).
+ * Parâmetros:
+ *   rootRef - endereço do ponteiro raiz da BST (PistaNode **)
+ *   texto   - string da pista a inserir
+ */
+void inserirPista(PistaNode **rootRef, const char *texto) {
+    if (texto == NULL) return; // nada a inserir
+    if (*rootRef == NULL) {
+        PistaNode *n = (PistaNode*) malloc(sizeof(PistaNode));
+        if (!n) { fprintf(stderr, "Erro ao alocar memória para PistaNode\n"); exit(1); }
+        n->pista = copiarString(texto);
+        n->esquerda = n->direita = NULL;
+        *rootRef = n;
+        return;
+    }
+    int cmp = strcmp(texto, (*rootRef)->pista);
+    if (cmp == 0) {
+        // Pista já coletada -> não insere duplicata
+        return;
+    } else if (cmp < 0) {
+        inserirPista(&((*rootRef)->esquerda), texto);
+    } else {
+        inserirPista(&((*rootRef)->direita), texto);
+    }
+}
+
+/* Libera recursivamente a BST de pistas */
+void liberarPistas(PistaNode *r) {
+    if (!r) return;
+    liberarPistas(r->esquerda);
+    liberarPistas(r->direita);
+    free(r->pista);
+    free(r);
+}
+
+/* 
+ * exibirPistas() – imprime a árvore de pistas em ordem alfabética.
+ * Percorre a BST em-ordem (left, root, right).
+ * Parâmetro:
+ *   root - ponteiro para a raiz da BST de pistas
+ */
+void exibirPistas(PistaNode *root) {
+    if (!root) return;
+    exibirPistas(root->esquerda);
+    printf(" - %s\n", root->pista);
+    exibirPistas(root->direita);
+}
+
+/* 
+ * explorarSalasComPistas() – controla a navegação entre salas e coleta de pistas.
+ * Comportamento:
+ *  - Mostra a sala atual.
+ *  - Se existir pista na sala, avisa e adiciona à BST (usar inserirPista).
+ *  - Oferece opções: 'e' (esquerda), 'd' (direita), 's' (sair).
+ * Parâmetros:
+ *  salaAtual - ponteiro para a sala inicial (ex: Hall de Entrada)
+ *  raizPistasRef - endereço do ponteiro raiz da BST onde serão guardadas as pistas
+ */
+void explorarSalasComPistas(Sala *salaAtual, PistaNode **raizPistasRef) {
+    char opcao;
+    while (1) {
+        printf("\nVocê está em: %s\n", salaAtual->nome);
+
+        // Se a sala tem pista, coletar (automaticamente) e informar
+        if (salaAtual->pista != NULL) {
+            printf("Você encontrou uma pista: \"%s\"\n", salaAtual->pista);
+            inserirPista(raizPistasRef, salaAtual->pista);
+        } else {
+            printf("Não há pistas visíveis nesta sala.\n");
+        }
+
+        // Exibir opções disponíveis
+        printf("Escolha o caminho:\n");
+        if (salaAtual->esquerda) printf("  (e) Ir para a esquerda -> %s\n", salaAtual->esquerda->nome);
+        if (salaAtual->direita)  printf("  (d) Ir para a direita -> %s\n", salaAtual->direita->nome);
+        printf("  (s) Sair da exploração\n> ");
+
+        if (scanf(" %c", &opcao) != 1) {
+            // entrada inválida, limpar e continuar
+            int c; while ((c = getchar()) != '\n' && c != EOF) {}
+            printf("Entrada inválida. Tente novamente.\n");
+            continue;
+        }
+
+        if (opcao == 'e') {
+            if (salaAtual->esquerda) {
+                salaAtual = salaAtual->esquerda;
+            } else {
+                printf("Não há caminho à esquerda desta sala.\n");
+            }
+        } else if (opcao == 'd') {
+            if (salaAtual->direita) {
+                salaAtual = salaAtual->direita;
+            } else {
+                printf("Não há caminho à direita desta sala.\n");
+            }
+        } else if (opcao == 's') {
+            printf("Você optou por sair da exploração.\n");
+            return;
+        } else {
+            printf("Opção inválida. Use 'e', 'd' ou 's'.\n");
+        }
+    }
+}
+
+/* -------- Programa principal (monta mapa e executa) -------- */
+
+int main(void) {
+    printf("=== Detective Quest: Coleta de Pistas ===\n");
+
+    // Montagem estática do mapa da mansão (árvore binária)
+    // Cada sala pode te
